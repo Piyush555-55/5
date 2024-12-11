@@ -1,0 +1,92 @@
+# Ensure necessary libraries are installed before running the app
+try:
+    from flask import Flask, request, jsonify
+    import requests
+    import random
+    import os
+except ImportError:
+    import subprocess
+    subprocess.check_call(['pip', 'install', 'flask', 'requests'])
+    from flask import Flask, request, jsonify
+    import requests
+    import random
+    import os
+
+app = Flask(__name__)
+
+# Mock Database for Vehicles
+fleet_data = {
+    "vehicle_1": {"location": "New York", "status": "on-time"},
+    "vehicle_2": {"location": "Chicago", "status": "delayed"},
+}
+
+# Route Optimization API (Using Google Maps API Integration)
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+
+@app.route('/optimize-route', methods=['POST'])
+def optimize_route():
+    data = request.json
+    start = data.get("start")
+    destination = data.get("destination")
+
+    if not start or not destination:
+        return jsonify({"error": "Start and destination are required."}), 400
+
+    # Integrate with Google Maps API
+    try:
+        response = requests.get(
+            "https://maps.googleapis.com/maps/api/directions/json",
+            params={
+                "origin": start,
+                "destination": destination,
+                "key": GOOGLE_MAPS_API_KEY,
+            },
+        )
+        directions = response.json()
+
+        if directions["status"] != "OK":
+            return jsonify({"error": "Unable to fetch route."}), 500
+
+        route = directions["routes"][0]["legs"][0]
+        optimized_route = {
+            "start": start,
+            "destination": destination,
+            "eta": route["duration"]["text"],
+            "distance": route["distance"]["text"],
+            "traffic_alerts": random.choice(["Moderate", "Heavy", "Clear"]),
+        }
+
+        return jsonify(optimized_route)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Fleet Tracking API
+@app.route('/fleet-status', methods=['GET'])
+def fleet_status():
+    return jsonify(fleet_data)
+
+# Add a new vehicle to the fleet
+@app.route('/add-vehicle', methods=['POST'])
+def add_vehicle():
+    data = request.json
+    vehicle_id = data.get("vehicle_id")
+    location = data.get("location")
+
+    if not vehicle_id or not location:
+        return jsonify({"error": "Vehicle ID and location are required."}), 400
+
+    fleet_data[vehicle_id] = {"location": location, "status": "on-time"}
+    return jsonify({"message": "Vehicle added successfully."})
+
+# Sustainability Metrics (Mock Data)
+@app.route('/sustainability', methods=['GET'])
+def sustainability_metrics():
+    metrics = {
+        "total_distance": "1200 km",
+        "fuel_consumed": "500 liters",
+        "carbon_emissions": "1.2 tons",
+    }
+    return jsonify(metrics)
+
+if __name__ == '__main__':
+    app.run(debug=True)
